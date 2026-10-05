@@ -1,1 +1,1 @@
-Asset label: unassigned
+Asset label: monitor
