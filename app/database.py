@@ -39,6 +39,11 @@ def init_db():
                 FOREIGN KEY (employee_id) REFERENCES employees(id)
             );
         """)
+        connection.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_active_assignment_asset
+            ON assignments(asset_id)
+            WHERE returned_at IS NULL
+        """)
         connection.commit()
     finally:
         connection.close()
