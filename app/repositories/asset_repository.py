@@ -63,6 +63,17 @@ def update_asset(asset_id, fields):
 def delete_asset(asset_id):
     connection = get_connection()
     try:
+        assignment = connection.execute(
+            """
+            SELECT id FROM assignments
+            WHERE asset_id = ? AND returned_at IS NULL
+            """,
+            (asset_id,)
+        ).fetchone()
+
+        if assignment:
+            return "assigned"
+
         cursor = connection.execute(
             "DELETE FROM assets WHERE id = ?", (asset_id,)
         )

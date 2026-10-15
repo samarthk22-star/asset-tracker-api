@@ -50,3 +50,8 @@ def delete_asset(asset_id: int):
         return Response(status_code=status.HTTP_204_NO_CONTENT)
     except asset_service.AssetNotFoundError:
         raise HTTPException(status_code=404, detail="Asset not found")
+    except asset_service.AssetAssignedError:
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot delete an asset that is currently assigned"
+        )

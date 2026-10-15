@@ -12,6 +12,10 @@ class DuplicateAssetCodeError(Exception):
     pass
 
 
+class AssetAssignedError(Exception):
+    pass
+
+
 def create_asset(data):
     try:
         return asset_repository.create_asset(
@@ -55,4 +59,9 @@ def update_asset(asset_id, data):
 
 def delete_asset(asset_id):
     get_asset(asset_id)
-    return asset_repository.delete_asset(asset_id)
+    result = asset_repository.delete_asset(asset_id)
+
+    if result == "assigned":
+        raise AssetAssignedError
+
+    return result
