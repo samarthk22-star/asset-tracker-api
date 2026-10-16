@@ -129,3 +129,44 @@ def test_employee_without_assets_gets_empty_list(client):
 def test_unknown_employee_returns_404(client):
     assert client.get("/employees/99999").status_code == 404
     assert client.get("/employees/99999/assets").status_code == 404
+
+def test_missing_employee_assignment_does_not_insert_row(client):
+    asset = create_asset(client)
+
+    response = client.post("/assignments", json={
+        "asset_id": asset.json()["id"],
+        "employee_id": 99999,
+    })
+
+    assert response.status_code == 404
+
+    connection = database.get_connection()
+    try:
+        count = connection.execute(
+            "SELECT COUNT(*) FROM assignments"
+        ).fetchone()[0]
+        assert count == 0
+    finally:
+        connection.close()
+
+
+def test_employee_assets_are_isolated(client):
+    asset = create_asset(client)
+    first_employee = create_employee(client, "EMP001")
+    second_employee = create_employee(client, "EMP002")
+
+    response = client.post("/assignments", json={
+        "asset_id": asset.json()["id"],
+        "employee_id": first_employee.json()["id"],
+    })
+    assert response.status_code == 201
+
+    first_assets = client.get(
+        f"/employees/{first_employee.json()['id']}/assets"
+    )
+    second_assets = client.get(
+        f"/employees/{second_employee.json()['id']}/assets"
+    )
+
+    assert len(first_assets.json()) == 1
+    assert second_assets.json() == []
