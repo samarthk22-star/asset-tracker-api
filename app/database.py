@@ -1,3 +1,4 @@
+
 import sqlite3
 from pathlib import Path
 
@@ -26,7 +27,8 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 employee_code TEXT NOT NULL UNIQUE,
                 name TEXT NOT NULL,
-                department TEXT NOT NULL
+                department TEXT NOT NULL,
+                email TEXT
             );
 
             CREATE TABLE IF NOT EXISTS assignments (
@@ -39,11 +41,36 @@ def init_db():
                 FOREIGN KEY (employee_id) REFERENCES employees(id)
             );
         """)
+
+        columns = {
+            row["name"]
+            for row in connection.execute(
+                "PRAGMA table_info(employees)"
+            ).fetchall()
+        }
+
+        if "email" not in columns:
+            connection.execute(
+                "ALTER TABLE employees ADD COLUMN email TEXT"
+            )
+
+        connection.execute("""
+            UPDATE employees
+            SET email = 'legacy-' || id || '@example.invalid'
+            WHERE email IS NULL OR TRIM(email) = ''
+        """)
+
+        connection.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_employee_email
+            ON employees(email)
+        """)
+
         connection.execute("""
             CREATE UNIQUE INDEX IF NOT EXISTS uq_active_assignment_asset
             ON assignments(asset_id)
             WHERE returned_at IS NULL
         """)
+
         connection.commit()
     finally:
         connection.close()
