@@ -1,6 +1,6 @@
 
 from fastapi import APIRouter, HTTPException, Query, Response, status
-
+from app.services import assignment_service
 from app.schemas.asset import AssetCreate, AssetUpdate, AssetResponse
 from app.services import asset_service
 
@@ -53,5 +53,17 @@ def delete_asset(asset_id: int):
     except asset_service.AssetAssignedError:
         raise HTTPException(
             status_code=409,
-            detail="Cannot delete an asset that is currently assigned"
+      detail="Cannot delete an asset with assignment history"
         )
+@router.get("/{asset_id}/assignments")
+def get_asset_history(
+    asset_id: int,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+):
+    try:
+        return assignment_service.get_asset_assignments(
+            asset_id, limit, offset
+        )
+    except assignment_service.AssetNotFoundError:
+        raise HTTPException(status_code=404, detail="Asset not found")
