@@ -59,20 +59,16 @@ def update_asset(asset_id, fields):
         connection.close()
     return get_asset_by_id(asset_id)
 
-
 def delete_asset(asset_id):
     connection = get_connection()
     try:
         assignment = connection.execute(
-            """
-            SELECT id FROM assignments
-            WHERE asset_id = ? AND returned_at IS NULL
-            """,
-            (asset_id,)
+            "SELECT id FROM assignments WHERE asset_id = ? LIMIT 1",
+            (asset_id,),
         ).fetchone()
 
         if assignment:
-            return "assigned"
+            return "has_history"
 
         cursor = connection.execute(
             "DELETE FROM assets WHERE id = ?", (asset_id,)

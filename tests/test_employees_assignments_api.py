@@ -267,3 +267,244 @@ def test_employee_with_assignment_history_cannot_be_deleted(client):
     assert response.status_code == 409
 
     assert client.get(f"/employees/{employee.json()['id']}").status_code == 200
+
+def test_return_assignment_records_timestamp(client):
+    asset = create_asset(client)
+    employee = create_employee(client)
+
+    assignment = client.post("/assignments", json={
+        "asset_id": asset.json()["id"],
+        "employee_id": employee.json()["id"],
+    })
+    assignment_id = assignment.json()["id"]
+
+    response = client.post(f"/assignments/{assignment_id}/return")
+
+    assert response.status_code == 200
+    assert response.json()["id"] == assignment_id
+    assert response.json()["returned_at"] is not None
+
+
+def test_repeated_return_returns_409(client):
+    asset = create_asset(client)
+    employee = create_employee(client)
+
+    assignment = client.post("/assignments", json={
+        "asset_id": asset.json()["id"],
+        "employee_id": employee.json()["id"],
+    })
+    assignment_id = assignment.json()["id"]
+
+    assert client.post(
+        f"/assignments/{assignment_id}/return"
+    ).status_code == 200
+
+    assert client.post(
+        f"/assignments/{assignment_id}/return"
+    ).status_code == 409
+
+
+def test_unknown_assignment_return_returns_404(client):
+    response = client.post("/assignments/99999/return")
+    assert response.status_code == 404
+
+
+def test_returned_asset_can_be_reassigned(client):
+    asset = create_asset(client)
+    first_employee = create_employee(client, "EMP001")
+    second_employee = create_employee(client, "EMP002")
+
+    first = client.post("/assignments", json={
+        "asset_id": asset.json()["id"],
+        "employee_id": first_employee.json()["id"],
+    })
+    assert first.status_code == 201
+
+    assert client.post(
+        f"/assignments/{first.json()['id']}/return"
+    ).status_code == 200
+
+    second = client.post("/assignments", json={
+        "asset_id": asset.json()["id"],
+        "employee_id": second_employee.json()["id"],
+    })
+    assert second.status_code == 201
+    assert second.json()["id"] != first.json()["id"]
+
+
+def test_asset_history_includes_returned_and_active_assignments(client):
+    asset = create_asset(client)
+    first_employee = create_employee(client, "EMP001")
+    second_employee = create_employee(client, "EMP002")
+    asset_id = asset.json()["id"]
+
+    first = client.post("/assignments", json={
+        "asset_id": asset_id,
+        "employee_id": first_employee.json()["id"],
+    })
+    assert first.status_code == 201
+
+    assert client.post(
+        f"/assignments/{first.json()['id']}/return"
+    ).status_code == 200
+
+    second = client.post("/assignments", json={
+        "asset_id": asset_id,
+        "employee_id": second_employee.json()["id"],
+    })
+    assert second.status_code == 201
+
+    history = client.get(f"/assets/{asset_id}/assignments")
+    assert history.status_code == 200
+    assert len(history.json()) == 2
+    assert history.json()[0]["returned_at"] is not None
+    assert history.json()[1]["returned_at"] is None
+
+
+def test_asset_history_pagination(client):
+    asset = create_asset(client)
+    employee = create_employee(client)
+    asset_id = asset.json()["id"]
+
+    for _ in range(3):
+        assignment = client.post("/assignments", json={
+            "asset_id": asset_id,
+            "employee_id": employee.json()["id"],
+        })
+        assert assignment.status_code == 201
+        assert client.post(
+            f"/assignments/{assignment.json()['id']}/return"
+        ).status_code == 200
+
+    response = client.get(
+        f"/assets/{asset_id}/assignments?limit=2&offset=1"
+    )
+
+    assert response.status_code == 200
+    assert len(response.json()) == 2
+    assert response.json()[0]["id"] < response.json()[1]["id"]
+
+
+def test_unknown_asset_history_returns_404(client):
+    assert client.get("/assets/99999/assignments").status_code == 404
+
+
+def test_asset_with_returned_assignment_cannot_be_deleted(client):
+    asset = create_asset(client)
+    employee = create_employee(client)
+
+    assignment = client.post("/assignments", json={
+        "asset_id": asset.json()["id"],
+        "employee_id": employee.json()["id"],
+    })
+    assert assignment.status_code == 201
+
+    assert client.post(
+        f"/assignments/{assignment.json()['id']}/return"
+    ).status_code == 200
+
+    response = client.delete(f"/assets/{asset.json()['id']}")
+    assert response.status_code == 409
+    assert client.get(f"/assets/{asset.json()['id']}").status_code == 200
+
+def test_return_preserves_assignment_details(client):
+    asset = create_asset(client)
+    employee = create_employee(client)
+
+    created = client.post("/assignments", json={
+        "asset_id": asset.json()["id"],
+        "employee_id": employee.json()["id"],
+    })
+    assert created.status_code == 201
+    original = created.json()
+
+    returned = client.post(
+        f"/assignments/{original['id']}/return"
+    )
+    assert returned.status_code == 200
+
+    result = returned.json()
+    assert result["id"] == original["id"]
+    assert result["asset_id"] == original["asset_id"]
+    assert result["employee_id"] == original["employee_id"]
+    assert result["assigned_at"] == original["assigned_at"]
+    assert result["returned_at"] is not None
+
+
+def test_returned_assignment_is_not_in_employee_current_assets(client):
+    asset = create_asset(client)
+    employee = create_employee(client)
+    employee_id = employee.json()["id"]
+
+    created = client.post("/assignments", json={
+        "asset_id": asset.json()["id"],
+        "employee_id": employee_id,
+    })
+    assert created.status_code == 201
+
+    returned = client.post(
+        f"/assignments/{created.json()['id']}/return"
+    )
+    assert returned.status_code == 200
+
+    response = client.get(f"/employees/{employee_id}/assets")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_employee_with_returned_assignment_cannot_be_deleted(client):
+    asset = create_asset(client)
+    employee = create_employee(client)
+    employee_id = employee.json()["id"]
+
+    created = client.post("/assignments", json={
+        "asset_id": asset.json()["id"],
+        "employee_id": employee_id,
+    })
+    assert created.status_code == 201
+
+    returned = client.post(
+        f"/assignments/{created.json()['id']}/return"
+    )
+    assert returned.status_code == 200
+
+    response = client.delete(f"/employees/{employee_id}")
+    assert response.status_code == 409
+
+    # Employee and assignment history must remain intact.
+    assert client.get(f"/employees/{employee_id}").status_code == 200
+    history = client.get(
+        f"/assets/{asset.json()['id']}/assignments"
+    )
+    assert history.status_code == 200
+    assert len(history.json()) == 1
+
+
+def test_repeated_return_does_not_change_assignment(client):
+    asset = create_asset(client)
+    employee = create_employee(client)
+
+    created = client.post("/assignments", json={
+        "asset_id": asset.json()["id"],
+        "employee_id": employee.json()["id"],
+    })
+    assert created.status_code == 201
+    assignment_id = created.json()["id"]
+
+    first_return = client.post(
+        f"/assignments/{assignment_id}/return"
+    )
+    assert first_return.status_code == 200
+    original_returned_at = first_return.json()["returned_at"]
+
+    second_return = client.post(
+        f"/assignments/{assignment_id}/return"
+    )
+    assert second_return.status_code == 409
+
+    history = client.get(
+        f"/assets/{asset.json()['id']}/assignments"
+    )
+    assert history.status_code == 200
+    assert len(history.json()) == 1
+    assert history.json()[0]["returned_at"] == original_returned_at

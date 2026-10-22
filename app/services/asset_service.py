@@ -56,12 +56,11 @@ def update_asset(asset_id, data):
             raise DuplicateAssetCodeError from exc
         raise
 
-
 def delete_asset(asset_id):
     get_asset(asset_id)
     result = asset_repository.delete_asset(asset_id)
 
-    if result == "assigned":
+    if result == "has_history":
         raise AssetAssignedError
 
     return result
