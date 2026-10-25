@@ -1,2 +1,9 @@
+
 __pycache__/
 *.pyc
+
+# Local SQLite database
+asset_tracker.db
+
+# Generated Locust results
+results_*.csv
